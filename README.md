@@ -48,7 +48,7 @@ Markdown
 
 ### 1. 概念模型 ER 图 (Conceptual ER Diagram)
 
-<img src="./01.png" width="90%" />
+![Part B ER Diagram](01.png)
 
 ### 2. 重要设计决策说明 (Design Decisions)
 1. **M:N 关系的处理**：对于 VIDEO-TAG（视频与标签）以及 MODERATOR-CATEGORY（审核资质）的 M:N 关系，在概念设计阶段直接标明多对多，转换为关系模式时拆分为独立的关联表（VIDEO_TAG 和 MODERATOR_CATEGORY），以满足第一范式（1NF）。
@@ -91,7 +91,7 @@ Markdown
 
 ### 3. DDL 物理建表依赖流程图 (Schema Execution Flow)
 
-<img src="./02.png" width="100%" />
+![Part C DDL Flow](02.png)
 
 ---
 
