@@ -16,14 +16,14 @@ Markdown# INT6164 数据库系统与管理个人作业
 * **COMMENT (评论)**：记录用户对视频发表的文字评论。
 
 ### 2. 核心属性定义
-* **USER**: UserID (PK), Username, Email, RegistrationTime, AccountStatus
-* **VIDEO**: VideoID (PK), Title, Duration, Status, SubmitTime, ReviewTime, ReviewRemark, CreatorID (FK), CategoryID (FK), ReviewerID (FK)
-* **CATEGORY**: CategoryID (PK), CategoryName, Description
-* **TAG**: TagID (PK), TagName
-* **MODERATOR**: ModeratorID (PK), ModeratorName, Email
-* **AITASK**: TaskID (PK), TaskType, GeneratedContent, IsAdopted, UserID (FK), VideoID (FK)
-* **VIDEO_LIKE**: (UserID, VideoID) (PK, FK), LikeTime
-* **COMMENT**: CommentID (PK), CommentText, CommentTime, CommentStatus, UserID (FK), VideoID (FK)
+* **USER**: `UserID` (PK), `Username`, `Email`, `RegistrationTime`, `AccountStatus`
+* **VIDEO**: `VideoID` (PK), `Title`, `Duration`, `Status`, `SubmitTime`, `ReviewTime`, `ReviewRemark`, `CreatorID` (FK), `CategoryID` (FK), `ReviewerID` (FK)
+* **CATEGORY**: `CategoryID` (PK), `CategoryName`, `Description`
+* **TAG**: `TagID` (PK), `TagName`
+* **MODERATOR**: `ModeratorID` (PK), `ModeratorName`, `Email`
+* **AITASK**: `TaskID` (PK), `TaskType`, `GeneratedContent`, `IsAdopted`, `UserID` (FK), `VideoID` (FK)
+* **VIDEO_LIKE**: (`UserID`, `VideoID`) (PK, FK), `LikeTime`
+* **COMMENT**: `CommentID` (PK), `CommentText`, `CommentTime`, `CommentStatus`, `UserID` (FK), `VideoID` (FK)
 
 ### 3. 实体间主要关系及其业务含义
 * **USER - VIDEO**: 1:N（一名用户可创建多条短视频，每条短视频仅由一名用户创建）。
@@ -31,15 +31,15 @@ Markdown# INT6164 数据库系统与管理个人作业
 * **VIDEO - TAG**: M:N（一条短视频可有多个标签，一个标签可被多条短视频使用）。
 * **MODERATOR - CATEGORY**: M:N（审核员可具备多个分类的审核资质，一个分类可有多名审核员）。
 * **USER - AITASK**: 1:N（一名用户可提交多个 AI 任务）。
-* **VIDEO - AITASK**: 0..1:N（未被采用的 AI 任务 VideoID 为空；一条视频可以使用零个或多个 AI 任务）。
+* **VIDEO - AITASK**: 0..1:N（未被采用的 AI 任务 `VideoID` 为空；一条视频可以使用零个或多个 AI 任务）。
 * **USER - VIDEO - VIDEO_LIKE**: M:N（通过关联实体表实现，记录点赞历史）。
 * **USER - VIDEO - COMMENT**: M:N（通过实体表实现 1:N 延伸，记录评论内容）。
 
 ### 4. 4条合理的设计假设
-1. **取消点赞处理**：用户取消点赞时，系统采用物理删除（直接删除 VIDEO_LIKE 记录），确保复合主键约束能精准保证每位用户对同一视频最多保留一条有效点赞。
-2. **下架视频历史数据保留**：状态变为 Removed 的视频，其历史点赞与评论记录在数据库中予以保留，但前端展示层进行屏蔽，以备审计分析。
-3. **审核流程触发规则**：新上传视频状态初始为 Pending，ReviewerID 和 ReviewTime 默认为 NULL；仅当状态改变为 Approved 或 Rejected 时才强制要求更新审核员与审核时间。
-4. **AI 任务独立性**：用户可随时使用 AI 工具生成内容，即便生成的脚本未最终转化为发布的视频，AI 任务记录依然独立保留（VideoID 可为空）。
+1. **取消点赞处理**：用户取消点赞时，系统采用物理删除（直接删除 `VIDEO_LIKE` 记录），确保复合主键约束能精准保证每位用户对同一视频最多保留一条有效点赞。
+2. **下架视频历史数据保留**：状态变为 `Removed` 的视频，其历史点赞与评论记录在数据库中予以保留，但前端展示层进行屏蔽，以备审计分析。
+3. **审核流程触发规则**：新上传视频状态初始为 `Pending`，`ReviewerID` 和 `ReviewTime` 默认为 `NULL`；仅当状态改变为 `Approved` 或 `Rejected` 时才强制要求更新审核员与审核时间。
+4. **AI 任务独立性**：用户可随时使用 AI 工具生成内容，即便生成的脚本未最终转化为发布的视频，AI 任务记录依然独立保留（`VideoID` 可为空）。
 
 ---
 
@@ -51,8 +51,8 @@ Markdown# INT6164 数据库系统与管理个人作业
 
 ### 2. 重要设计决策说明 (Design Decisions)
 1. **M:N 关系的处理**：对于 `VIDEO-TAG`（视频与标签）以及 `MODERATOR-CATEGORY`（审核资质）的 M:N 关系，在概念设计阶段直接标明多对多，转换为关系模式时拆分为独立的关联表（`VIDEO_TAG` 和 `MODERATOR_CATEGORY`），以满足第一范式（1NF）。
-2. **AI 任务与视频的关联 (0..1 : N)**：用户提交 AI 任务时未必立即关联视频，因此 `AITASK.VideoID` 允许为空（NULL）。当某条视频采用该 AI 内容时，填写对应的 VideoID。这种设计保证了 AI 创作工具的独立使用体验。
-3. **将 Like 建模为关联关系而非 Video 属性**：若在 VIDEO 表中直接设置 `LikeCount` 属性，在多用户并发点赞时会导致频繁的行级锁竞争与数据库写瓶颈。将点赞独立为 `VIDEO_LIKE` 实体并设置复合主键 `(UserID, VideoID)`，既保证了“同一用户只能有效点赞一次”的约束，又支持高并发写入和点赞历史审计。
+2. **AI 任务与视频的关联 (0..1 : N)**：用户提交 AI 任务时未必立即关联视频，因此 `AITASK.VideoID` 允许为空（`NULL`）。当某条视频采用该 AI 内容时，填写对应的 `VideoID`。这种设计保证了 AI 创作工具的独立使用体验。
+3. **将 Like 建模为关联关系而非 Video 属性**：若在 `VIDEO` 表中直接设置 `LikeCount` 属性，在多用户并发点赞时会导致频繁的行级锁竞争与数据库写瓶颈。将点赞独立为 `VIDEO_LIKE` 实体并设置复合主键 `(UserID, VideoID)`，既保证了“同一用户只能有效点赞一次”的约束，又支持高并发写入和点赞历史审计。
 
 ---
 
@@ -84,7 +84,7 @@ Markdown# INT6164 数据库系统与管理个人作业
 ### 2. 完整性约束说明 (Integrity Constraints)
 1. **Referential Integrity (参照完整性)**：`VIDEO.CategoryID` 必须引用 `CATEGORY.CategoryID` 中存在的值。若尝试删除一个包含视频的分类，将因 `ON DELETE RESTRICT` 阻止删除，防止产生孤立数据。
 2. **Domain Constraint (域约束)**：`VIDEO.Duration` 必须限制为大于 0 的正整数 (`CHECK (Duration > 0)`)；`VIDEO.Status` 仅允许在 `('Draft', 'Pending', 'Approved', 'Rejected', 'Removed')` 中取值。
-3. **Business Integrity Constraint (业务逻辑约束)**：当视频状态改变为 'Approved' 或 'Rejected' 时，必须强制记录 `ReviewerID` 和 `ReviewTime`。
+3. **Business Integrity Constraint (业务逻辑约束)**：当视频状态改变为 `Approved` 或 `Rejected` 时，必须强制记录 `ReviewerID` 和 `ReviewTime`。
 
 ---
 
@@ -149,7 +149,4 @@ WHERE NOT EXISTS (
     WHERE v.ReviewerID = m.ModeratorID 
       AND v.CategoryID = mc.CategoryID
 );
-2. 关系代数表达式 (Relational Algebra)查询 1 的关系代数 (RA1):$$\pi_{VideoID, Title, Username, CategoryName, SubmitTime} (\sigma_{Status='Approved'} (VIDEO) \bowtie USER \bowtie CATEGORY)$$查询 3 的关系代数 (RA3):$$\pi_{UserID, Username, Email} (USER) - \pi_{UserID, Username, Email} (USER \bowtie AITASK)$$3. 查询优化与推导树 (Selection Push Down)针对 查询 1，运用选择下推（Selection Push Down）优化前后对比效果如下：未优化查询树 (Unoptimized Query Tree)优化后查询树 (Selection Push Down Tree)优化推导表达式：$$\pi_{VideoID, Title, Username, CategoryName, SubmitTime} ( (\sigma_{Status='Approved'} (VIDEO)) \bowtie USER \bowtie CATEGORY )$$优化理由说明：通过将选择谓词 $\sigma_{Status='Approved'}$ 下推到笛卡尔积/连接（Join）操作之前执行，可以在连接计算开展前过滤掉所有未通过审核（如 Draft, Pending, Rejected, Removed）的绝大多数视频行，极大地减少了参与后续 Join 操作的中间结果集行数，降低了内存占用和磁盘 I/O 开销。Part E: 索引与物理设计建议 (20分)1. 索引设计建议列表idx_video_status_cat：建立在 VIDEO(Status, CategoryID) 联合索引上。支持查询：优化 Part D 中的 Query 1 与 Query 2 的条件过滤与分组。idx_video_reviewer_cat：建立在 VIDEO(ReviewerID, CategoryID) 联合索引上。支持查询：优化 Part D 中的 Query 4 审核管理查询。idx_video_submittime：建立在 VIDEO(SubmitTime) 单列索引上。支持查询：支持平台按视频提交时间降序分页与时间范围检索。2. B+Tree 索引架构与检索机制图 (B+Tree Indexing)3. B+Tree 检索机制与键顺序分析B+Tree 在范围查询（Range Search）与排序中的优势：在执行形如 WHERE SubmitTime BETWEEN '2026-01-01' AND '2026-10-01' 或 ORDER BY SubmitTime DESC 的查询时，B+Tree 的叶子节点通过有序双向链表相连。查询引擎只需通过 B+Tree 索引快速定位到起始边界节点，随后直接沿着叶子节点链表进行顺序扫描，避免了全表随机磁盘读取，极大提升效率。联合索引键顺序选择（Key Order Selection）：在联合索引 (Status, CategoryID) 中，将选择性高且经常作为等值匹配条件（Status = 'Approved'）的 Status 字段放在左侧，使得查询能最快利用 B+Tree 的前缀匹配原则过滤数据。
----
-
-
+2. 关系代数表达式 (Relational Algebra)查询 1 的关系代数 (RA1):$$\pi_{\text{VideoID, Title, Username, CategoryName, SubmitTime}} (\sigma_{\text{Status='Approved'}} (\text{VIDEO}) \bowtie \text{USER} \bowtie \text{CATEGORY})$$查询 3 的关系代数 (RA3):$$\pi_{\text{UserID, Username, Email}} (\text{USER}) - \pi_{\text{UserID, Username, Email}} (\text{USER} \bowtie \text{AITASK})$$3. 查询优化与推导树 (Selection Push Down)针对 查询 1，运用选择下推（Selection Push Down）优化前后对比效果如下：未优化查询树 (Unoptimized Query Tree)优化后查询树 (Selection Push Down Tree)优化推导表达式：$$\pi_{\text{VideoID, Title, Username, CategoryName, SubmitTime}} ( (\sigma_{\text{Status='Approved'}} (\text{VIDEO})) \bowtie \text{USER} \bowtie \text{CATEGORY} )$$优化理由说明：通过将选择谓词 $\sigma_{\text{Status='Approved'}}$ 下推到笛卡尔积/连接（Join）操作之前执行，可以在连接计算开展前过滤掉所有未通过审核（如 Draft, Pending, Rejected, Removed）的绝大多数视频行，极大地减少了参与后续 Join 操作的中间结果集行数，降低了内存占用和磁盘 I/O 开销。Part E: 索引与物理设计建议 (20分)1. 索引设计建议列表idx_video_status_cat：建立在 VIDEO(Status, CategoryID) 联合索引上。支持查询：优化 Part D 中的 Query 1 与 Query 2 的条件过滤与分组。idx_video_reviewer_cat：建立在 VIDEO(ReviewerID, CategoryID) 联合索引上。支持查询：优化 Part D 中的 Query 4 审核管理查询。idx_video_submittime：建立在 VIDEO(SubmitTime) 单列索引上。支持查询：支持平台按视频提交时间降序分页与时间范围检索。2. B+Tree 索引架构与检索机制图 (B+Tree Indexing)3. B+Tree 检索机制与键顺序分析B+Tree 在范围查询（Range Search）与排序中的优势：在执行形如 WHERE SubmitTime BETWEEN '2026-01-01' AND '2026-10-01' 或 ORDER BY SubmitTime DESC 的查询时，B+Tree 的叶子节点通过有序双向链表相连。查询引擎只需通过 B+Tree 索引快速定位到起始边界节点，随后直接沿着叶子节点链表进行顺序扫描，避免了全表随机磁盘读取，极大提升效率。联合索引键顺序选择（Key Order Selection）：在联合索引 (Status, CategoryID) 中，将选择性高且经常作为等值匹配条件（Status = 'Approved'）的 Status 字段放在左侧，使得查询能最快利用 B+Tree 的前缀匹配原则过滤数据。S
