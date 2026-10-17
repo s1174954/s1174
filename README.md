@@ -96,6 +96,7 @@ erDiagram
         string Email
     }
     AITASK {
+
         int TaskID PK
         string TaskType
         string GeneratedContent
@@ -116,3 +117,70 @@ erDiagram
         int UserID FK
         int VideoID FK
     }
+
+    ---
+
+## Part C: Relational Schema, Keys 与完整性约束 (20分)
+
+### 1. 完整关系模式 (Relational Schema)
+* **USER** (**UserID**, Username, Email, RegistrationTime, AccountStatus)
+* **CATEGORY** (**CategoryID**, CategoryName, Description)
+* **TAG** (**TagID**, TagName)
+* **MODERATOR** (**ModeratorID**, ModeratorName, Email)
+* **VIDEO** (**VideoID**, Title, Duration, Status, SubmitTime, ReviewTime, ReviewRemark, *CreatorID*, *CategoryID*, *ReviewerID*)
+  * *FK*: CreatorID -> USER(UserID), CategoryID -> CATEGORY(CategoryID), ReviewerID -> MODERATOR(ModeratorID)
+* **AITASK** (**TaskID**, TaskType, GeneratedContent, IsAdopted, *UserID*, *VideoID*)
+  * *FK*: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)
+* **COMMENT** (**CommentID**, CommentText, CommentTime, CommentStatus, *UserID*, *VideoID*)
+  * *FK*: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)
+* **VIDEO_LIKE** (**UserID, VideoID**, LikeTime)
+  * *PK*: (UserID, VideoID)
+  * *FK*: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)
+* **VIDEO_TAG** (**VideoID, TagID**)
+  * *PK*: (VideoID, TagID)
+  * *FK*: VideoID -> VIDEO(VideoID), TagID -> TAG(TagID)
+* **MODERATOR_CATEGORY** (**ModeratorID, CategoryID**)
+  * *PK*: (ModeratorID, CategoryID)
+  * *FK*: ModeratorID -> MODERATOR(ModeratorID), CategoryID -> CATEGORY(CategoryID)
+
+---
+
+### 2. 重要完整性约束说明
+1. **Referential Integrity (参照完整性)**：`VIDEO.CategoryID` 必须引用 `CATEGORY.CategoryID` 中存在的值。当删除某个分类时，应采用 `ON DELETE RESTRICT` 阻止删除，防止产生孤立视频。
+2. **Domain Constraint (域约束)**：`VIDEO.Duration` 必须限制为大于 0 的正整数（秒数），`VIDEO.Status` 仅允许在列表 `('Draft', 'Pending', 'Approved', 'Rejected', 'Removed')` 中取值。
+3. **Business Integrity Constraint (业务逻辑约束)**：当视频状态更改为 `'Approved'` 或 `'Rejected'` 时，`ReviewerID` 和 `ReviewTime` 绝不能为空（NOT NULL）。
+
+---
+
+### 3. DDL 语句实现 (DDL SQL)
+
+```sql
+-- 1. MODERATOR_CATEGORY 关系表 (审核资质关联表)
+CREATE TABLE MODERATOR_CATEGORY (
+    ModeratorID INT NOT NULL,
+    CategoryID INT NOT NULL,
+    PRIMARY KEY (ModeratorID, CategoryID),
+    FOREIGN KEY (ModeratorID) REFERENCES MODERATOR(ModeratorID) ON DELETE CASCADE,
+    FOREIGN KEY (CategoryID) REFERENCES CATEGORY(CategoryID) ON DELETE CASCADE
+);
+
+-- 2. VIDEO 关系表
+CREATE TABLE VIDEO (
+    VideoID INT AUTO_INCREMENT PRIMARY KEY,
+    Title VARCHAR(255) NOT NULL,
+    Duration INT NOT NULL CHECK (Duration > 0),
+    Status VARCHAR(20) NOT NULL CHECK (Status IN ('Draft', 'Pending', 'Approved', 'Rejected', 'Removed')),
+    SubmitTime DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ReviewTime DATETIME NULL,
+    ReviewRemark VARCHAR(500) NULL,
+    CreatorID INT NOT NULL,
+    CategoryID INT NOT NULL,
+    ReviewerID INT NULL,
+    FOREIGN KEY (CreatorID) REFERENCES USER(UserID),
+    FOREIGN KEY (CategoryID) REFERENCES CATEGORY(CategoryID),
+    FOREIGN KEY (ReviewerID) REFERENCES MODERATOR(ModeratorID),
+    CONSTRAINT CHK_Review_Info CHECK (
+        (Status IN ('Approved', 'Rejected') AND ReviewerID IS NOT NULL AND ReviewTime IS NOT NULL) OR
+        (Status NOT IN ('Approved', 'Rejected'))
+    )
+);
