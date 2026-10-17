@@ -1,17 +1,22 @@
 ```mermaid
-graph LR
-    subgraph DDL建表落地流程与依赖控制台
-    A[1. CREATE TABLE USER / CATEGORY / MODERATOR] -->|物理生成无依赖主表| B[Query OK, 0 rows affected]
-    B --> C[2. CREATE TABLE VIDEO / AITASK / COMMENT]
-    C -->|外键约束 & CHECK 校验生效| D[Query OK, 0 rows affected]
-    D --> E[3. CREATE TABLE VIDEO_LIKE / VIDEO_TAG / MODERATOR_CATEGORY]
-    E -->|复合主键与级联删除约束通过| F[Query OK, 0 rows affected]
+graph TD
+    subgraph 优化前查询树 (Unoptimized Tree)
+    T1[π VideoID, Title, Username] --- J1[Join ⋈]
+    J1 --- J2[Join ⋈]
+    J1 --- C1[CATEGORY]
+    J2 --- U1[USER]
+    J2 --- S1[σ Status='Approved']
+    S1 --- V1[VIDEO 全表扫描]
     end
 
-    style A fill:#e1f5fe,stroke:#0288d1
-    style C fill:#e1f5fe,stroke:#0288d1
-    style E fill:#e1f5fe,stroke:#0288d1
-    style B fill:#f1f8e9,stroke:#558b2f
-    style D fill:#f1f8e9,stroke:#558b2f
-    style F fill:#f1f8e9,stroke:#558b2f
+    subgraph 优化后推导树 (Selection Push Down Tree)
+    T2[π VideoID, Title, Username] --- J3[Join ⋈]
+    J3 --- J4[Join ⋈]
+    J3 --- C2[CATEGORY]
+    J4 --- U2[USER]
+    J4 --- Filter[σ Status='Approved' VIDEO 提前过滤]
+    end
+    
+    style Filter fill:#ffe0b2,stroke:#f57c00
+    style S1 fill:#fff9c4,stroke:#fbc02d
 ```
