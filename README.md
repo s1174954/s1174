@@ -35,77 +35,66 @@ Markdown# INT6164 数据库系统与管理个人作业
 
 ## Part B: 概念数据库设计 - ER Diagram (25分)
 
-### 1. ER 图展示
+### 1. 概念模型与 ER 图映射 (ER Schema Mapping)
 
-```mermaid
-erDiagram
-    USER ||--o{ VIDEO : "publishes"
-    CATEGORY ||--o{ VIDEO : "belongs_to"
-    VIDEO }|--|{ TAG : "has_tag"
-    MODERATOR }|--|{ CATEGORY : "has_qualification"
-    USER ||--o{ AITASK : "creates"
-    VIDEO ||--o{ AITASK : "adopted_by"
-    USER ||--o{ VIDEO_LIKE : "likes"
-    VIDEO ||--o{ VIDEO_LIKE : "liked_by"
-    USER ||--o{ COMMENT : "writes"
-    VIDEO ||--o{ COMMENT : "has_comment"
-    MODERATOR ||--o{ VIDEO : "reviews"
+为确保跨平台高可读性，下表完整展示了系统内主要实体、核心属性、主外键及实体间最大基数关系：
 
-    USER {
-        int UserID PK
-        string Username
-        string Email
-        datetime RegistrationTime
-        string AccountStatus
-    }
-    VIDEO {
-        int VideoID PK
-        string Title
-        int Duration
-        string Status
-        datetime SubmitTime
-        datetime ReviewTime
-        string ReviewRemark
-        int CreatorID FK
-        int CategoryID FK
-        int ReviewerID FK
-    }
-    CATEGORY {
-        int CategoryID PK
-        string CategoryName
-        string Description
-    }
-    TAG {
-        int TagID PK
-        string TagName
-    }
-    MODERATOR {
-        int ModeratorID PK
-        string ModeratorName
-        string Email
-    }
-    AITASK {
-        int TaskID PK
-        string TaskType
-        string GeneratedContent
-        boolean IsAdopted
-        int UserID FK
-        int VideoID FK
-    }
-    VIDEO_LIKE {
-        int UserID PK_FK
-        int VideoID PK_FK
-        datetime LikeTime
-    }
-    COMMENT {
-        int CommentID PK
-        string CommentText
-        datetime CommentTime
-        string CommentStatus
-        int UserID FK
-        int VideoID FK
-    }
-2. 重要设计决策说明 (Design Decisions)M:N 关系的处理：对于 VIDEO-TAG（视频与标签）以及 MODERATOR-CATEGORY（审核资质）的 M:N 关系，在概念设计中直接标明多对多，转换为关系模式时拆分为独立的关联表（VIDEO_TAG 和 MODERATOR_CATEGORY），以满足第一范式（1NF）。AI 任务与视频的关联 (0..1 : N)：用户提交 AI 任务时未必立即关联视频，因此 AITASK.VideoID 允许为空（NULL）。当某条视频采用该 AI 内容时，填写对应的 VideoID。这种设计保证了 AI 创作工具的独立使用体验。将 Like 建模为关联关系而非 Video 属性：若在 VIDEO 表中直接设置 LikeCount 属性，在多用户并发点赞时会导致频繁的行级锁竞争与数据库写瓶颈。将点赞独立为 VIDEO_LIKE 实体并设置复合主键 (UserID, VideoID)，既保证了“同一用户只能有效点赞一次”的约束，又支持高并发写入和点赞历史审计。Part C: Relational Schema, Keys 与完整性约束 (20分)1. 完整关系模式 (Relational Schema)USER (UserID, Username, Email, RegistrationTime, AccountStatus)CATEGORY (CategoryID, CategoryName, Description)TAG (TagID, TagName)MODERATOR (ModeratorID, ModeratorName, Email)VIDEO (VideoID, Title, Duration, Status, SubmitTime, ReviewTime, ReviewRemark, CreatorID, CategoryID, ReviewerID)FK: CreatorID -> USER(UserID), CategoryID -> CATEGORY(CategoryID), ReviewerID -> MODERATOR(ModeratorID)AITASK (TaskID, TaskType, GeneratedContent, IsAdopted, UserID, VideoID)FK: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)COMMENT (CommentID, CommentText, CommentTime, CommentStatus, UserID, VideoID)FK: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)VIDEO_LIKE (UserID, VideoID, LikeTime)PK: (UserID, VideoID)FK: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)VIDEO_TAG (VideoID, TagID)PK: (VideoID, TagID)FK: VideoID -> VIDEO(VideoID), TagID -> TAG(TagID)MODERATOR_CATEGORY (ModeratorID, CategoryID)PK: (ModeratorID, CategoryID)FK: ModeratorID -> MODERATOR(ModeratorID), CategoryID -> CATEGORY(CategoryID)2. 完整性约束说明 (Integrity Constraints)Referential Integrity (参照完整性)：VIDEO.CategoryID 必须引用 CATEGORY.CategoryID 中存在的值。若尝试删除一个包含视频的分类，将因 ON DELETE RESTRICT 阻止删除，防止产生孤立数据。Domain Constraint (域约束)：VIDEO.Duration 必须限制为大于 0 的正整数 (CHECK (Duration > 0))；VIDEO.Status 仅允许在 ('Draft', 'Pending', 'Approved', 'Rejected', 'Removed') 中取值。Business Integrity Constraint (业务逻辑约束)：当视频状态改变为 'Approved' 或 'Rejected' 时，必须强制记录 ReviewerID 和 ReviewTime。3. DDL 核心建表语句SQL-- 1. MODERATOR_CATEGORY 关系表 (审核资质关联表)
+| 实体 (Entity) | 主键 (PK) | 关键属性 (Attributes) | 关联实体与业务关系 (Relationships) | 最大基数 (Cardinality) |
+| :--- | :--- | :--- | :--- | :--- |
+| **USER** | `UserID` | Username, Email, RegistrationTime, AccountStatus | 发布 `VIDEO`<br>提交 `AITASK` | 1 : N<br>1 : N |
+| **CATEGORY** | `CategoryID` | CategoryName, Description | 包含 `VIDEO`<br>对应 `MODERATOR` 资质 | 1 : N<br>M : N |
+| **VIDEO** | `VideoID` | Title, Duration, Status, SubmitTime, ReviewTime, ReviewRemark | 属于 `CATEGORY`<br>由 `USER` 创建<br>绑定 `TAG`<br>采用 `AITASK` | N : 1<br>N : 1<br>M : N<br>N : 0..1 |
+| **TAG** | `TagID` | TagName | 贴在 `VIDEO` 上 | M : N |
+| **MODERATOR** | `ModeratorID`| ModeratorName, Email | 审核 `VIDEO`<br>具备 `CATEGORY` 资质 | 1 : N (可选)<br>M : N |
+| **AITASK** | `TaskID` | TaskType, GeneratedContent, IsAdopted | 由 `USER` 提交<br>被 `VIDEO` 关联采用 | N : 1<br>N : 0..1 |
+| **VIDEO_LIKE** | `(UserID, VideoID)` | LikeTime | `USER` 与 `VIDEO` 之间的点赞互动 | M : N (弱实体/关联表) |
+| **COMMENT** | `CommentID` | CommentText, CommentTime, CommentStatus | `USER` 对 `VIDEO` 发表的评论 | N : 1 |
+
+---
+
+### 2. 重要设计决策说明 (Design Decisions)
+1. **M:N 关系的处理**：对于 `VIDEO-TAG`（视频与标签）以及 `MODERATOR-CATEGORY`（审核资质）的 M:N 关系，在概念设计阶段直接标明多对多，转换为关系模式时拆分为独立的关联表（`VIDEO_TAG` 和 `MODERATOR_CATEGORY`），以满足第一范式（1NF）。
+2. **AI 任务与视频的关联 (0..1 : N)**：用户提交 AI 任务时未必立即关联视频，因此 `AITASK.VideoID` 允许为空（NULL）。当某条视频采用该 AI 内容时，填写对应的 VideoID。这种设计保证了 AI 创作工具的独立使用体验。
+3. **将 Like 建模为关联关系而非 Video 属性**：若在 VIDEO 表中直接设置 `LikeCount` 属性，在多用户并发点赞时会导致频繁的行级锁竞争与数据库写瓶颈。将点赞独立为 `VIDEO_LIKE` 实体并设置复合主键 `(UserID, VideoID)`，既保证了“同一用户只能有效点赞一次”的约束，又支持高并发写入和点赞历史审计。
+
+---
+
+## Part C: Relational Schema, Keys 与完整性约束 (20分)
+
+### 1. 完整关系模式 (Relational Schema)
+* **USER** (**UserID**, Username, Email, RegistrationTime, AccountStatus)
+* **CATEGORY** (**CategoryID**, CategoryName, Description)
+* **TAG** (**TagID**, TagName)
+* **MODERATOR** (**ModeratorID**, ModeratorName, Email)
+* **VIDEO** (**VideoID**, Title, Duration, Status, SubmitTime, ReviewTime, ReviewRemark, *CreatorID*, *CategoryID*, *ReviewerID*)
+  * *FK*: CreatorID -> USER(UserID), CategoryID -> CATEGORY(CategoryID), ReviewerID -> MODERATOR(ModeratorID)
+* **AITASK** (**TaskID**, TaskType, GeneratedContent, IsAdopted, *UserID*, *VideoID*)
+  * *FK*: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)
+* **COMMENT** (**CommentID**, CommentText, CommentTime, CommentStatus, *UserID*, *VideoID*)
+  * *FK*: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)
+* **VIDEO_LIKE** (**UserID, VideoID**, LikeTime)
+  * *PK*: (UserID, VideoID)
+  * *FK*: UserID -> USER(UserID), VideoID -> VIDEO(VideoID)
+* **VIDEO_TAG** (**VideoID, TagID**)
+  * *PK*: (VideoID, TagID)
+  * *FK*: VideoID -> VIDEO(VideoID), TagID -> TAG(TagID)
+* **MODERATOR_CATEGORY** (**ModeratorID, CategoryID**)
+  * *PK*: (ModeratorID, CategoryID)
+  * *FK*: ModeratorID -> MODERATOR(ModeratorID), CategoryID -> CATEGORY(CategoryID)
+
+---
+
+### 2. 完整性约束说明 (Integrity Constraints)
+1. **Referential Integrity (参照完整性)**：`VIDEO.CategoryID` 必须引用 `CATEGORY.CategoryID` 中存在的值。若尝试删除一个包含视频的分类，将因 `ON DELETE RESTRICT` 阻止删除，防止产生孤立数据。
+2. **Domain Constraint (域约束)**：`VIDEO.Duration` 必须限制为大于 0 的正整数 (`CHECK (Duration > 0)`)；`VIDEO.Status` 仅允许在 `('Draft', 'Pending', 'Approved', 'Rejected', 'Removed')` 中取值。
+3. **Business Integrity Constraint (业务逻辑约束)**：当视频状态改变为 'Approved' 或 'Rejected' 时，必须强制记录 `ReviewerID` 和 `ReviewTime`。
+
+---
+
+### 3. DDL 核心建表语句
+
+```sql
+-- 1. MODERATOR_CATEGORY 关系表 (审核资质关联表)
 CREATE TABLE MODERATOR_CATEGORY (
     ModeratorID INT NOT NULL,
     CategoryID INT NOT NULL,
