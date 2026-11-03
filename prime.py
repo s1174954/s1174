@@ -1,4 +1,5 @@
 # this function determines whether the number is a prime number
+# updated for testing PR
 def is_prime(n):
     if n <= 1:
         return False
